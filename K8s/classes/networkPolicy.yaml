@@ -1,0 +1,42 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: school-portal-network-policy
+  namespace: default 
+spec:
+  podSelector:
+    matchLabels:
+      app: school-portal
+  policyTypes:
+    - Ingress
+    - Egress
+  
+ 
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: controller 
+      ports:
+        - protocol: TCP
+          port: 5002
+
+  
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+          namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app: school-db 
+      ports:
+        - protocol: TCP
+          port: 5432

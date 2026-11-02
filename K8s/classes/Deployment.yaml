@@ -1,22 +1,26 @@
 apiVersion: apps/v1  # FIXED: was app/v1
 kind: Deployment
 metadata:
-  name: school-portal
+  name: class-micro
 spec:
   replicas: 7
   selector:
     matchLabels:
-      app: school-portal
+      app: class-micro
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailability: 0
-      maxSurge: 4
+      maxSurge: 25%
   template:
     metadata:
       labels:       
-        app: school-portal
+        app: class-micro
     spec:
+      securityContext:    
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
       dnsPolicy: ClusterFirst
       dnsConfig:
         options:
@@ -32,14 +36,14 @@ spec:
                 - key: app
                   operator: In
                   values:
-                  - school-portal
+                  - class-micro
               topologyKey: kubernetes.io/hostname
       containers:
-        - name: sch-pod01
+        - name: class-pod01
           image: nginx:latest 
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 5001
+            - containerPort: 5002
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -56,20 +60,20 @@ spec:
           startupProbe:
             httpGet:
               path: /health/start
-              port: 5001
+              port: 5002
             initialDelaySeconds: 5
             periodSeconds: 5
             failureThreshold: 30
           livenessProbe:
             httpGet:
               path: /health/live
-              port: 5001
+              port: 5002
             periodSeconds: 5
             timeoutSeconds: 3
           readinessProbe:
             httpGet:
               path: /health/ready
-              port: 5001
+              port: 5002
             periodSeconds: 5
             timeoutSeconds: 3
           volumeMounts:      

@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 FROM python:3.12-slim AS runtime
 WORKDIR /app
+RUN useradd --uid 1001 --create-home appuser
 COPY --from=builder /opt/venv /opt/venv
 COPY app.py . 
 CMD ["/opt/venv/bin/gunicorn","--bind","0.0.0.0:5002", "app:app.py"]

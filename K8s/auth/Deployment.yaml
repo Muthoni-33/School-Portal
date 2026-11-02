@@ -1,0 +1,85 @@
+apiVersion: apps/v1  # FIXED: was app/v1
+kind: Deployment
+metadata:
+  name: auth-micro
+spec:
+  replicas: 7
+  selector:
+    matchLabels:
+      app: auth-micro
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailability: 0
+      maxSurge: 25%
+  template:
+    metadata:
+      labels:       
+        app: auth-micro
+    spec:
+      securityContext:    
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"    
+      affinity:
+        podAntiAffinity:    
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm: 
+              labelSelector:
+                matchExpressions: 
+                - key: app
+                  operator: In
+                  values:
+                  - auth-micro
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: sch-pod01
+          image: nginx:latest 
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5001
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          envFrom:
+            - configMapRef:
+                name: conf 
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          startupProbe:
+            httpGet:
+              path: /health/start
+              port: 5001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 5001
+            periodSeconds: 5
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 5001
+            periodSeconds: 5
+            timeoutSeconds: 3
+          volumeMounts:      
+            - name: school-storage
+              mountPath: /data/storage
+      volumes:              
+        - name: school-storage
+          persistentVolumeClaim:
+            claimName: school-storage-pvc
