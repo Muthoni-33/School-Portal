@@ -4,7 +4,6 @@ import psycopg2
 
 app = Flask(__name__)
 
-# DevOps Injection Hooks (Reads from runtime environment variables)
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "classes_db")

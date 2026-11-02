@@ -33,7 +33,7 @@ def login():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        # Secure query executing parameters separation
+        
         cur.execute("SELECT id, role FROM users WHERE username = %s AND password = %s;", (username, password))
         user = cur.fetchone()
         cur.close()
@@ -44,7 +44,7 @@ def login():
                 "status": "authenticated",
                 "user_id": user[0],
                 "role": user[1],
-                "token": "mock-jwt-token-xyz" # Token logic layer placeholder
+                "token": "mock-jwt-token-xyz" 
             }), 200
         return jsonify({"error": "Invalid username or password"}), 401
         

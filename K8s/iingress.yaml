@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: school-portal-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  tls:
+    - hosts:
+        - schoolportal.com
+      secretName: school-portal-tls-secret 
+  rules:
+    - host: schoolportal.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: auth-micro
+                port:
+                  number: 5003      
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: class-micro
+                port:
+                  number: 5004 

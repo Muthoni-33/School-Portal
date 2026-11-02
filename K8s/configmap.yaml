@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: school-portal-conf
+  namespace: default
+data:
+  DB_HOST: "school-db"  
+  DB_PORT: "5432"       
+  DB_NAME: "auth_db"

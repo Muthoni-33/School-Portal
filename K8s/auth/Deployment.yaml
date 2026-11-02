@@ -50,6 +50,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: conf 
+            - secretRef:
+                name: school-portal-secrets
           resources:
             requests:
               memory: "256Mi"
