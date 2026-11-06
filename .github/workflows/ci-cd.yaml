@@ -5,8 +5,12 @@ on:
       - main
       - staging
       - production
+  pull_request:
+    branches:
+      - staging
+      - production
 permissions:
-  contents: read
+  contents: write
   security-events: write
   attestations: write
   id-token: write
@@ -19,21 +23,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        services:
+        service:
           - auth-service
           - class-service
     steps:
       - name: checkout code
-        uses: action/checkout@v4
+        uses: actions/checkout@v4
 
       - name: setup python
-        uses: action/setup-python@v5
+        if: github.ref_name == 'main'
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
           cache-dependency-path: services/${{matrix.service}}/requirements.txt
 
       - name: dependency instalation
+        if: github.ref_name == 'main'
         run: |
           "python -m pip install --upgrade pip
            if [ -f requirements.txt ]; then 
@@ -43,30 +49,36 @@ jobs:
           "
         
       - name: Secret Scan (Gitleaks)
+        if: github.ref_name == 'main'
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Dependency Vulnerability Scan (Trivy)
+        if: github.ref_name == 'main'
         uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: fs
-          scan-ref: services/${{ matrix.services }}
+          scan-ref: services/${{ matrix.service }}
           exit-code: 1 
           severity: CRITICAL,HIGH
 
       - name: Unit test
+        if: github.ref_name == 'main'
         run: |
           pytest tests/unit
 
       - name: Integration test
+        if: github.ref_name == 'main'
         run: |
           pytest tests/integration
       
       - name: Setup QEMU (Multi-architecture support)
+        if: github.ref_name == 'main'
         uses: docker/setup-qemu-action@v3
 
       - name: Setup Docker Buildx
+        if: github.ref_name == 'main'
         uses: docker/setup-buildx-action@v3
 
       - name: Authenticate to DockerHub
@@ -76,20 +88,30 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and Push Docker Image
+        if: github.ref_name == 'main'
         id: docker-build
         uses: docker/build-push-action@v6
         with:
-          context: services/${{ matrix.services }}
-          file: services/${{ matrix.services }}/Dockerfile
+          context: services/${{ matrix.service }}
+          file: services/${{ matrix.service }}/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/${{ matrix.services }}:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
+
+      - name: Setup Crane Utility (Promotion Engine)
+        if: github.ref_name != 'main'
+        uses: imjasonh/setup-crane@v0.3.0
+
+      - name: Promote Dev Image to Staging
+        if: github.ref_name == 'staging'
+        run: |
+          crane tag ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:dev-${{ github.sha }} staging-${{ github.sha }}
 
       - name: Container Image Scan (Trivy)
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.services }}:${{ github.sha }}
+          image-ref: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
           format: table
           exit-code: 1
           severity: CRITICAL,HIGH
@@ -97,7 +119,7 @@ jobs:
       - name: Generate Software Bill of Materials (SBOM)
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.services }}:${{ github.sha }}
+          image: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
           output-format: spdx-json
 
       - name: Install Cosign Engine
@@ -105,12 +127,12 @@ jobs:
 
       - name: Cryptographically Sign Image (Keyless)
         run: |
-          cosign sign --yes ${{ secrets.DOCKER_USERNAME }}/${{ matrix.services }}:${{ github.sha }}
+          cosign sign --yes ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
 
       - name: Generate Build Provenance Attestation
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.services }}
+          subject-name: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}
           subject-digest: ${{ steps.docker-build.outputs.digest }}
           push-to-registry: true
 
@@ -122,7 +144,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        services:
+        service:
           - auth-service
           - class-service
     
@@ -131,19 +153,34 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
+        if: github.ref_name == 'main'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }} 
 
       - name: Update Kubeconfig for EKS
+        if: github.ref_name == 'main'
         run: |
           aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name ${{ secrets.AWS_CLUSTER_NAME }}
 
       - name: Update Kubernetes Container Image Tag
+        if: github.ref_name == 'main'
         run: |
-          kubectl set image deployment/${{ matrix.services }} sch-pod01=${{ secrets.DOCKER_USERNAME }}/${{ matrix.services }}:${{ github.sha }} --record
-        
-      - name: Verify Rolling Update Rollout Status
+          kubectl set image deployment/${{ matrix.service }} sch-pod01=${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }} --record
+          kubectl rollout status deployment/${{ matrix.service }} --timeout=5m
+      - name: Update Manifest Configurations (GitOps Write)
+        if: github.ref_name != 'main'
         run: |
-          kubectl rollout status deployment/${{ matrix.services }} --timeout=5m
+          DEPLOY_TAG="${{ github.ref_name }}-${{ github.sha }}"
+          sed -i "s|image: .*${{ matrix.service }}:.*|image: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:$DEPLOY_TAG|g" ../../k8s/deployment.yaml
+      - name: Commit and Push Changes to Trigger ArgoCD Sync
+        if: github.ref_name != 'main'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@://github.com"
+          
+          git pull origin ${{ github.ref_name }}
+          git add ../../k8s/deployment.yaml
+          git commit -m "chore(gitops): promote ${{ matrix.service }} to ${{ github.ref_name }} [tag: ${{ env.DEPLOY_TAG }}]"
+          git push origin ${{ github.ref_name }}
