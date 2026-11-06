@@ -1,13 +1,13 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: school-portal-staging
+  name: school-portal-production
   namespace: argocd # Always deployed into the ArgoCD management namespace
 spec:
   project: default
   source:
     repoURL: 'https://github.com/Muthoni-33/School-Portal'
-    targetRevision: staging 
+    targetRevision: production 
     path: k8s                
   destination:
     server: 'https://default.svc' 

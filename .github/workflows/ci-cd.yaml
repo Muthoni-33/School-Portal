@@ -103,10 +103,10 @@ jobs:
         if: github.ref_name != 'main'
         uses: imjasonh/setup-crane@v0.3.0
 
-      - name: Promote Dev Image to Staging
-        if: github.ref_name == 'staging'
+      - name: Promote Dev Image to production
+        if: github.ref_name == 'production'
         run: |
-          crane tag ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:dev-${{ github.sha }} staging-${{ github.sha }}
+          crane tag ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:dev-${{ github.sha }} production-${{ github.sha }}
 
       - name: Container Image Scan (Trivy)
         uses: aquasecurity/trivy-action@0.28.0
