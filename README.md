@@ -111,4 +111,4 @@ graph LR
 * **Trigger Event:** Triggered when staging validation criteria are satisfied and code is merged into the `production` deployment branch.
 * **Secure Delivery Chain:** Crane tags the proven staging image layer to immutable production markers: `prod-${{ github.sha }}` and `latest`. The pipeline then triggers a final container scan, compiles an Anchore Software Bill of Materials (SBOM), and signs the layer cryptographically with a **Cosign Keyless Signature** utilizing OIDC identity federation tokens.
 * **Resiliency Rollout:** The manifest write step commits the production image tag back to Git. The production instance of ArgoCD coordinates a rolling update using your configured `maxSurge: 25%` boundaries. Old pods are retired only after the new, signed production pods pass their startup and readiness health checks.
-2. Staging Infrastructure Tracking (`staging` Branch - Pure GitOps)
+
