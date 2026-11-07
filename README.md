@@ -103,3 +103,15 @@ graph LR
 * **Cluster Deployment:** The pipeline uses an imperative `kubectl set image` command targeting the Dev environment to instantly roll out changes to the development cluster namespace.
 
 #### 2. Staging Infrastructure Tracking (`staging` Branch - Pure GitOps)
+* **Trigger Event:** Triggered when a validated code change is merged via a Pull Request into the `staging` tracking branch.
+* **Promotion Engine (Crane):** To protect the deployment from environmental drift, **the Dockerfile is never re-compiled.** The runner utilizes Google's **Crane** utility to execute a server-side tag assignment. It points the existing, verified `dev-${{ github.sha }}` registry layer digest to a new tag metadata location: `staging-${{ github.sha }}` in less than 2 seconds.
+* **ArgoCD Automation:** Following image tagging, the runner executes a `sed -i` string override on the repository's `k8s/deployment.yaml` file. The GitHub Actions bot commits this structural layout change directly back to the `staging` web branch with `contents: write` authorization. **ArgoCD** instantly notices the Git configuration update, detects the state difference between Git and EKS, and synchronizes the staging cluster workloads automatically.
+
+#### 3. Production Hardening & Release (`production` Branch - Enterprise GitOps)
+* **Trigger Event:** Triggered when staging validation criteria are satisfied and code is merged into the `production` deployment branch.
+* **Secure Delivery Chain:** Crane tags the proven staging image layer to immutable production markers: `prod-${{ github.sha }}` and `latest`. The pipeline then triggers a final container scan, compiles an Anchore Software Bill of Materials (SBOM), and signs the layer cryptographically with a **Cosign Keyless Signature** utilizing OIDC identity federation tokens.
+* **Resiliency Rollout:** The manifest write step commits the production image tag back to Git. The production instance of ArgoCD coordinates a rolling update using your configured `maxSurge: 25%` boundaries. Old pods are retired only after the new, signed production pods pass their startup and readiness health checks.
+
+* 
+
+#### 2. Staging Infrastructure Tracking (`staging` Branch - Pure GitOps)
